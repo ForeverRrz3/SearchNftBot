@@ -1,0 +1,1 @@
+PAYMENT = ["send","ton"]
