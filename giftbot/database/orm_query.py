@@ -158,7 +158,6 @@ async def orm_search_nft(session: AsyncSession, name_nft: str, last_num:int, dat
     #Одна из страниц пагинации.
     result = await session.execute(query.offset(last_num).limit(15))
     l = result.scalars().all()
-    print(len(l))
     list_nfts = []
     for nft in l:
         print(nft.num, nft)
@@ -175,7 +174,6 @@ async def orm_create_nft(session: AsyncSession, name_nft: str, callback: types.C
     query = select(Gift).where(Gift.name == name_nft)
     res = await session.execute(query)
     l = res.scalars().all()
-    print(len(l))
     problems = []
     max_num = max_num_gift(name_nft)
 
@@ -190,7 +188,6 @@ async def orm_create_nft(session: AsyncSession, name_nft: str, callback: types.C
         cnt +=1
         try:
             res = find_gift_info(name_nft, i)
-            print(max_num, i)
             session.add(Gift(name
                                   =name_nft, num=i, model=res["Model"],symbol=res["Symbol"],bg=res["Bg"]))
 
@@ -258,6 +255,5 @@ async def orm_get_list_admins(session: AsyncSession, last_num: int = 0):
 
     adm_list = [TextLink(admin.admin_id, url=f"tg://user?id={admin.admin_id}") for admin in admins]
     admins_list = as_list(as_marked_section("Админы: ",*adm_list, marker="- "))
-    print(adm_list,"FUGSDIUFYDFGUYDGFUFKJGDSYHFDUFHGDUYFGDUYFGDYUFGDFUYGDYUFGSDYUFGSDUYFGSDUFYGDIF")
     return admins_list
 
