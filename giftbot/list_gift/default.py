@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 from requests import *
+
 from inflect import *
 
 def find_all_gifts():

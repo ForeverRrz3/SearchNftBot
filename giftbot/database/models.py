@@ -1,4 +1,3 @@
-from more_itertools.recipes import unique
 from sqlalchemy import String,Float,Text,DateTime,func,Boolean
 from sqlalchemy.orm import DeclarativeBase,Mapped,mapped_column
 
@@ -35,6 +34,13 @@ class Symbol(Base):
 
 class Bg(Base):
     __tablename__ = "bg"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(30), unique=True)
+
+
+class NameGift(Base):
+    __tablename__ = "name_gift"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(30), unique=True)

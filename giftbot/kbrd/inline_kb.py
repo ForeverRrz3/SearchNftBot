@@ -6,7 +6,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from common.payments import PAYMENT
 
 
-from utility.paginator import Paginator
+from utils.paginator import Paginator
 
 
 class StarsCallback(CallbackData,prefix="stars"):

@@ -1,22 +1,23 @@
-from datetime import datetime
+import asyncio
+
 
 
 from aiogram.utils.formatting import TextLink, as_marked_list, as_list, as_marked_section
+from aiohttp import ClientSession
 from sqlalchemy.ext.asyncio import AsyncSession
 from requests import *
 from bs4 import BeautifulSoup
-from random import randint
 
-from time import sleep
-from aiogram import types
-from database.models import Gift, Banner, Symbol, Bg, Admins
+from database.models import Gift, Banner, NameGift, Symbol, Bg, Admins
 from sqlalchemy import select,update,delete, values
 
-from aiogram import Bot
+from list_gift.default import find_all_gifts
+
 from list_gift.find_gifts import max_num_gift
 from list_gift.info_gifts import find_gift_info
 
 
+import ssl
 
 async def orm_get_all_gifts(session:AsyncSession, name: str):
 
@@ -40,11 +41,11 @@ async def orm_get_all_gifts(session:AsyncSession, name: str):
 async def orm_create_banners(session: AsyncSession, banners: dict):
     query = select(Banner)
     result = await session.execute(query)
-    l = result.scalars().all()
-    if result.first() and len(l) == len(banners.values()):
+    res = result.scalars().all()
+    if result.first() and len(res) == len(banners.values()):
         return
 
-    in_bd = [banner.name for banner in l]
+    in_bd = [banner.name for banner in res]
     session.add_all([Banner(name=name, description=description) for name, description in banners.items() if name not in in_bd])
     await session.commit()
 
@@ -140,6 +141,67 @@ def is_ok_data(query, data, atribute, base):
     return query
 
 
+async def fetch_gift_data(
+        session: ClientSession, url: str,
+        semaphore: asyncio.Semaphore, session_db: AsyncSession,
+        name_gift: str, num_gift: int) -> dict:
+    ssl_context = ssl.create_default_context()
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    headers = {"User-Agent":
+                "mozilla/5.0 (Windows; U; Windows NT 6.1; en-Us; rv:1.9.1.5"}
+    try:
+        async with semaphore:
+            async with session.get(url, ssl=ssl_context, headers=headers, timeout=10) as response:
+                soup = BeautifulSoup(await response.text(), 'lxml')
+                data_gift = soup.find_all('td')[:-1]
+
+                gift_data = {
+                    'Model': ' '.join(data_gift[1].text.strip().split()[:-1]),
+                    'Bg': ' '.join(data_gift[2].text.strip().split()[:-1]),
+                    'Symbol': ' '.join(data_gift[3].text.strip().split()[:-1]),
+                }
+                session_db.add(Gift(name=name_gift, num=num_gift, model=gift_data['Model'], symbol=gift_data['Symbol'], bg=gift_data['Bg']))
+                return gift_data
+    except IndexError:
+        return None
+    except Exception as e:
+        await asyncio.sleep(10)
+        await fetch_gift_data(session, url, semaphore, session_db, name_gift, num_gift)
+
+
+async def orm_create_nft(name_gift: str, session_db: AsyncSession):
+    
+    query = select(Gift).where(Gift.name == name_gift)
+    result = await session_db.execute(query)
+
+    all_gifts_in_db = result.scalars().all()
+    
+    added_gifts = [gift.num for gift in all_gifts_in_db]
+
+
+    semaphore = asyncio.Semaphore(20)
+    max_gift_num = max_num_gift(name_gift)
+    name_gift = name_gift.replace(' ', '').replace('-', '')
+
+    async with ClientSession() as session:
+        tasks = []
+
+        for num_gift in range(max_gift_num, 0, -1):
+            if num_gift in added_gifts:
+                continue
+
+
+            task = asyncio.create_task(
+                fetch_gift_data(session,
+                                f"https://t.me/nft/{name_gift}-{num_gift}",
+                                semaphore,
+                                session_db, name_gift, num_gift))
+            
+            tasks.append(task)
+        
+        await asyncio.gather(*tasks)
+        await session_db.commit()
 
 
 async def orm_search_nft(session: AsyncSession, name_nft: str, last_num:int, data: dict):
@@ -160,7 +222,7 @@ async def orm_search_nft(session: AsyncSession, name_nft: str, last_num:int, dat
     l = result.scalars().all()
     list_nfts = []
     for nft in l:
-        print(nft.num, nft)
+        
         list_nfts.append(TextLink(nft.name + "  " + "#" + str(nft.num),
                                      url=f"https://t.me/nft/{nft.name.replace(" ", "").replace("-", "")}-{nft.num}")+
                          f"\nМодель: {nft.model}\n"
@@ -169,58 +231,6 @@ async def orm_search_nft(session: AsyncSession, name_nft: str, last_num:int, dat
 
     return list_nfts, max_len
 
-async def orm_create_nft(session: AsyncSession, name_nft: str, callback: types.CallbackQuery, bot: Bot):
-    user = callback.from_user.id
-    query = select(Gift).where(Gift.name == name_nft)
-    res = await session.execute(query)
-    l = res.scalars().all()
-    problems = []
-    max_num = max_num_gift(name_nft)
-
-    if res.first() and len(l) == max_num:
-        return False
-    m = [nft.num for nft in l]
-    cnt = 0
-    for i in range(len(l)+1, max_num + 1):
-        if i in m:
-            continue
-
-        cnt +=1
-        try:
-            res = find_gift_info(name_nft, i)
-            session.add(Gift(name
-                                  =name_nft, num=i, model=res["Model"],symbol=res["Symbol"],bg=res["Bg"]))
-
-            if cnt%1000==0:
-                sleep(randint(3,20))
-                await bot.send_message(text=f"Уже сохранено: {i} {name_nft}, {str(datetime.now())[11:-7]}",chat_id=user)
-            if cnt % 8000 == 0:
-                await session.commit()
-        except IndexError as e:
-            await bot.send_message(text=f"Нет подарка под номером: t.me/nft/{name_nft}-{i}", chat_id=user)
-        except Exception as e:
-            problems.append(i)
-            await bot.send_message(text=f"Возникла ошибка: {e}. Подарок под номером: {i}", chat_id=user)
-
-    while problems:
-        for i in problems[:]:
-            try:
-                res = find_gift_info(name_nft, i)
-                print(max_num, i)
-                session.add(Gift(name
-                                      =name_nft, num=i, model=res["Model"],symbol=res["Symbol"],bg=res["Bg"]))
-
-                if i%1000==0:
-                    sleep(randint(1,7))
-                    await bot.send_message(text=f"Уже сохранено: {i} {name_nft}, {str(datetime.now())[11:-7]}",chat_id=user)
-
-                problems.remove(i)
-            except Exception as e:
-                problems.append(i)
-                await bot.send_message(text=f"Возникла ошибка: {e}. Подарок под номером: {i}",chat_id=user)
-
-    await session.commit()
-    return True
 
 ################## Создание/изменение админа ########################################
 async def orm_create_admin(session: AsyncSession, user_id: int):
@@ -257,3 +267,30 @@ async def orm_get_list_admins(session: AsyncSession, last_num: int = 0):
     admins_list = as_list(as_marked_section("Админы: ",*adm_list, marker="- "))
     return admins_list
 
+
+
+############################## Добавление всех названий подарков ########################################
+
+async def orm_create_name_gift(session: AsyncSession):
+
+    gifts = find_all_gifts()
+    
+    query = select(NameGift)
+    result = await session.execute(query)
+    gifts_db = result.scalars().all()
+    print(len(gifts_db),len(gifts))
+    if len(gifts_db) == len(gifts):
+        return
+
+    for gift in gifts:
+        if gift in gifts_db:
+            continue
+        session.add(NameGift(name=gift))
+
+    await session.commit()
+
+async def orm_get_all_names_gift(session: AsyncSession):
+    query = select(NameGift)
+    result = await session.execute(query)
+
+    return result.scalars().all()

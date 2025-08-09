@@ -12,7 +12,7 @@ from math import ceil
 from aiogram import Bot
 from kbrd.kb import admin_kb
 from kbrd.inline_kb import admin_add_nft, AdminCallback, admin_answer, btns_add_admin
-from database.orm_query import orm_get_banners, orm_add_image, orm_create_nft, orm_create_admin, orm_get_list_admins
+from database.orm_query import orm_get_banners, orm_add_image, orm_create_nft, orm_create_admin, orm_get_list_admins, orm_get_all_names_gift
 from list_gift.default import find_all_gifts
 from list_gift.info_gifts import max_num_gift
 from filters.admin import IsAdmin
@@ -28,11 +28,8 @@ async def view_list_admins(message: types.Message, session: AsyncSession):
     await message.answer(text=admins_list.as_html())
 
 
-############################## Добавление/изменение баннеров ########################################
 
-class Banners(StatesGroup):
-    image = State()
-
+############################### Приветственное окно ##########################################
 @admin_router.message(Command("admin"))
 async def start_admin(message: types.Message):
     await message.answer("Что хотите сделать?",reply_markup=admin_kb)
@@ -41,26 +38,30 @@ async def start_admin(message: types.Message):
 async def start_admin(message: types.Message, state: FSMContext):
     await state.clear()
     await message.answer("Что хотите сделать?",reply_markup=admin_kb)
+########################################################################
 
 
+#START##################### Добавление нового нфт в БД ############################
 @admin_router.message(F.text.lower() == "создать новый нфт")
-async def add_new_nft(message: types.Message):
+async def add_new_nft(message: types.Message, session: AsyncSession):
 
-    nfts = find_all_gifts()
+    nfts = [name_gift.name for name_gift in await orm_get_all_names_gift(session)]
 
     kb = admin_add_nft(btns=nfts)
     await message.answer(text="Выберите модель для добавления в БД: ", reply_markup=kb)
 
+
 @admin_router.callback_query(AdminCallback.filter(),F.data.endswith("False"))
 async def answer_no(callback: types.CallbackQuery, callback_data: AdminCallback, session: AsyncSession):
     await callback.message.edit_text(text="Ок, отменено")
+
 
 @admin_router.callback_query(AdminCallback.filter(),F.data.endswith("True"))
 async def answer_yes(callback: types.CallbackQuery, callback_data: AdminCallback, session: AsyncSession, bot: Bot):
     await callback.message.edit_text(f"Выполняется добавление {callback_data.name_nft}")
     if callback_data.answer:
         # 12:59:33
-        if await orm_create_nft(session, callback_data.name_nft, callback, bot):
+        if await orm_create_nft(callback_data.name_nft, session):
             await callback.message.answer(f"Добавлен новый нфт - {callback_data.name_nft}")
         else:
             await callback.message.answer(f"Такой нфт уже есть - {callback_data.name_nft}")
@@ -73,8 +74,14 @@ async def add_new_nft_orm(callback: types.CallbackQuery, callback_data: AdminCal
 
     await callback.message.edit_text(text=f"{callback_data.name_nft} - {max_num}. Займет примерно {ceil(max_num*0.0035)} минут, уверены?", reply_markup=admin_answer(callback_data.name_nft))
 
+#END#############################################################################################
 
 
+
+#START################################ Добавление банера ######################################################
+
+class Banners(StatesGroup):
+    image = State()
 
 @admin_router.message(StateFilter(None),F.text.lower() == "добавление/изменение баннера")
 async def add_image_banner(message: types.Message, state: FSMContext, session: AsyncSession):
@@ -100,8 +107,10 @@ async def set_image(message: types.Message, state: FSMContext, session: AsyncSes
 async def set_image2(message: types.Message):
     await message.answer("Отправьте фото")
 
+#END######################################################################################
 
 
+######################## Добавление админа #######################################
 class Admin(StatesGroup):
     user_id  = State()
 

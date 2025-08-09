@@ -4,7 +4,6 @@ from aiogram.utils.formatting import TextLink
 
 
 from aiogram import Router, types, Bot, F
-import json
 from aiogram.filters import CommandStart, StateFilter, Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InputMediaPhoto
@@ -19,7 +18,6 @@ from routers.menu_processing import get_menu_content
 
 from database.orm_query import (orm_get_banner, orm_get_owner, orm_create_admin, \
     orm_get_admins)
-from aiosend import CryptoPay, TESTNET
 
 
 
@@ -32,7 +30,7 @@ class Info_gift(StatesGroup):
     Bg = State()
 
 
-
+#################################### Добавление в админку ################################################
 @private_router.message(Command("try_admin"))
 async def try_to_get_admin(message: types.Message, session: AsyncSession):
     admins = await orm_get_admins(session)
@@ -87,7 +85,7 @@ async def start(message :types.Message, session: AsyncSession,state: FSMContext)
     image, reply_markup = await get_menu_content(level=0, session=session, menu_name="main")
 
     await message.answer_photo(photo=image.media, caption=image.caption, reply_markup=reply_markup)
-
+########################################################################################
 
 async def menu_main(callback: types.CallbackQuery, callback_data: MenuCallback, session: AsyncSession):
     image, reply_markup = await get_menu_content(level=callback_data.level,

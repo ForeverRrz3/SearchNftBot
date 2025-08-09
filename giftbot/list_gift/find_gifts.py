@@ -1,12 +1,9 @@
 from aiogram.utils.formatting import TextLink
 from requests import *
 from bs4 import BeautifulSoup
-from sqlalchemy.util import await_only
 
 from list_gift.info_gifts import max_num_gift
-from inflect import *
-from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
+
 
 def next_find_gift(name:str ,num:int, data: dict):
 

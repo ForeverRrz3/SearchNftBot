@@ -6,12 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram.utils.formatting import as_list, as_marked_section
 
 from kbrd.inline_kb import (main_menu_kb, btns_name_nft, get_atributes, btns_search_nft,
-                            btns_buying_stars, btns_cnt_stars, btns_payment, fsm_btns_atributes_nft)
+                            fsm_btns_atributes_nft)
 
 from database.orm_query import orm_get_banner, orm_get_all_symbols, orm_get_all_bgs, orm_search_nft
 from list_gift.default import find_all_gifts
 from list_gift.info_gifts import get_all_models
-from utility.toncoin import get_toncoin_rub
 
 async def menu_user(
         session:AsyncSession,
