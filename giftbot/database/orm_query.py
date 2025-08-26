@@ -24,29 +24,39 @@ import ssl
 ################## Создание/получение баннеров ###########################
 
 async def orm_create_banners(session: AsyncSession, banners: dict):
+    
     query = select(Banner)
     result = await session.execute(query)
+    
     list_Banners = result.scalars().all()
+    
     if result.first() and len(list_Banners) == len(banners.values()):
         return
 
     in_bd = [banner.name for banner in list_Banners]
     session.add_all([Banner(name=name, description=description) for name, description in banners.items() if name not in in_bd])
+    
     await session.commit()
 
 async def orm_get_banners(session: AsyncSession):
+    
     query = select(Banner)
     result = await session.execute(query)
+    
     return result.scalars().all()
 
 async def orm_add_image(session: AsyncSession, image: str, name: str):
+    
     query = update(Banner).where(Banner.name == name).values(image=image)
     await session.execute(query)
+    
     await session.commit()
 
 async def orm_get_banner(session: AsyncSession, menu_name: str):
+    
     query = select(Banner).where(Banner.name == menu_name)
     result = await session.execute(query)
+    
     return result.scalar()
 
 ##################################### Создание атрибутов ######################################################
@@ -54,6 +64,7 @@ async def orm_get_banner(session: AsyncSession, menu_name: str):
 def get_sym_bg():
     headers = {"User-Agent":
                    "mozilla/5.0 (Windows; U; Windows NT 6.1; en-Us; rv:1.9.1.5"}
+    
     url = "https://fragment.com/gifts/astralshard"
     response = get(url, headers=headers)
     soup = BeautifulSoup(response.text, "lxml")
@@ -71,10 +82,12 @@ def get_sym_bg():
             res_syms.append(sym.get("data-value"))
         elif "backdrop" in t:
             res_bgs.append(sym.get("data-value"))
+            
     return res_syms, res_bgs
 
 
 async def orm_create_bg(session: AsyncSession):
+    
     query = select(Bg)
     res = await session.execute(query)
     bgs_db = res.scalars().all()
@@ -84,12 +97,16 @@ async def orm_create_bg(session: AsyncSession):
         return
 
     list_bgs_db = [bg.name for bg in bgs_db]
+    
     for bg in bgs_site:
         if bg not in list_bgs_db:
            session.add(Bg(name=bg))
+            
     await session.commit()
 
+
 async def orm_create_sym(session: AsyncSession):
+    
     query = select(Symbol)
     syms_site, bgs_site = get_sym_bg()
     res = await session.execute(query)
@@ -102,19 +119,24 @@ async def orm_create_sym(session: AsyncSession):
     for sym in syms:
         if sym not in list_syms_db:
             session.add(Symbol(name=sym))
+            
     await session.commit()
 
 # Получение узора или фона
 
 async def orm_get_all_symbols(session: AsyncSession):
+    
     query = select(Symbol)
     res = await session.execute(query)
+    
     return res.scalars().all()
 
 
 async def orm_get_all_bgs(session: AsyncSession):
+    
     query = select(Bg)
     res = await session.execute(query)
+    
     return res.scalars().all()
 
 
@@ -128,6 +150,7 @@ def is_ok_data(query, data, atribute, base):
             return query.where(base == data[atribute][0])
         else:
             return query.filter(base.in_(data[atribute]))
+            
     return query
 
 
@@ -141,6 +164,7 @@ async def fetch_gift_data(
     headers = {"User-Agent":
                 "mozilla/5.0 (Windows; U; Windows NT 6.1; en-Us; rv:1.9.1.5"}
     try:
+        
         async with semaphore:
             async with session.get(url, ssl=ssl_context, headers=headers, timeout=10) as response:
                 soup = BeautifulSoup(await response.text(), 'lxml')
@@ -152,10 +176,15 @@ async def fetch_gift_data(
                     'Symbol': ' '.join(data_gift[3].text.strip().split()[:-1]),
                 }
                 session_db.add(Gift(name=name_gift, num=num_gift, model=gift_data['Model'], symbol=gift_data['Symbol'], bg=gift_data['Bg']))
+                
                 return gift_data
+                
     except IndexError:
+        
         return None
+        
     except Exception as e:
+        
         await asyncio.sleep(10)
         await fetch_gift_data(session, url, semaphore, session_db, name_gift, num_gift)
 
@@ -234,6 +263,7 @@ async def orm_create_admin(session: AsyncSession, user_id: int):
     await session.commit()
 
 async def orm_get_owner(session: AsyncSession):
+    
     query = select(Admins)
     result = await session.execute(query)
 
@@ -241,6 +271,7 @@ async def orm_get_owner(session: AsyncSession):
     return owner
 
 async def orm_get_admins(session: AsyncSession):
+    
     query = select(Admins)
     result = await session.execute(query)
     admins_list = result.scalars().all()
@@ -249,12 +280,14 @@ async def orm_get_admins(session: AsyncSession):
 
 
 async def orm_get_list_admins(session: AsyncSession, last_num: int = 0):
+    
     query = select(Admins)
     result = await session.execute(query.offset(last_num).limit(20))
     admins = result.scalars().all()
 
     adm_list = [TextLink(admin.admin_id, url=f"tg://user?id={admin.admin_id}") for admin in admins]
     admins_list_message = as_list(as_marked_section("Админы: ",*adm_list, marker="- "))
+    
     return admins_list
 
 
@@ -278,10 +311,12 @@ async def orm_create_name_gift(session: AsyncSession):
         session.add(NameGift(name=gift))
 
     await session.commit()
+    
 
 async def orm_get_all_names_gift(session: AsyncSession):
+    
     query = select(NameGift)
     result = await session.execute(query)
 
-
     return result.scalars().all()
+
